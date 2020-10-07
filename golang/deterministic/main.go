@@ -4,44 +4,38 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"time"
 	"math/rand"
 
 	"go.opentelemetry.io/otel/api/global"
 	"go.opentelemetry.io/otel/api/trace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace"
+	"go.opentelemetry.io/otel/exporters/stdout"
+
+	httptrace "go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
 	honeycombsamplers "github.com/honeycombio/opentelemetry-samplers-go/honeycombsamplers"
-	honeycomb "github.com/honeycombio/opentelemetry-exporter-go/honeycomb"
 
 )
 
 func main() {
-	exp, err := honeycomb.NewExporter(
-		honeycomb.Config{
-			APIKey: os.Getenv("HONEYCOMB_WRITE_KEY"),
-		},
-		honeycomb.TargetingDataset(os.Getenv("HONEYCOMB_DATASET")),
-		honeycomb.WithServiceName("sampling-service-otel-go"),
-	)
+	exp, err := stdout.NewExporter([]stdout.Option{
+		stdout.WithQuantiles([]float64{0.5, 0.9, 0.99}),
+		stdout.WithPrettyPrint(),
+	}...)
 	if err != nil {
 		log.Fatal(err)
 	}
-	sample, err := honeycombsamplers.DeterministicSampler(5)
+	sample, err := honeycombsamplers.DeterministicSampler(2)
 	if err != nil {
 		log.Fatal(err)
 	}
 	config := sdktrace.Config{
 		DefaultSampler: sample,
 	}
-	tp, err := sdktrace.NewProvider(sdktrace.WithConfig(config), sdktrace.WithSyncer(exp))
-	if err != nil {
-		log.Fatal(err)
-	}
+	tp := sdktrace.NewTracerProvider(sdktrace.WithConfig(config), sdktrace.WithSyncer(exp))
 
-	global.SetTraceProvider(tp)
+	global.SetTracerProvider(tp)
 	tracer := global.Tracer("sampling-service")
 	mux := http.NewServeMux()
 
