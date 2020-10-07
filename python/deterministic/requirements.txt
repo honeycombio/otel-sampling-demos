@@ -1,0 +1,2 @@
+opentelemetry-api==0.13b0
+opentelemetry-sdk==0.13b0
